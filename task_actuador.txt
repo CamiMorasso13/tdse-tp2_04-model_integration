@@ -1,75 +1,58 @@
--task_system_attribute.h
+-task_actuador_attribute.h
 
-Define los atributos del sistema de tareas, principalmente para modelar un autómata de estados finitos (FSM, Finite State Machine).
-En typedef enum task_system_ev define los eventos del sistema
-               EV_SYS_IDLE,
-							 EV_SYS_LOOP_DET,
-							 EV_SYS_NOT_LOOP_DET,
-							 EV_SYS_MANUAL_BTN,
-							 EV_SYS_NOT_MANUAL_BTN,
-							 EV_SYS_IR_PHO_CELL,
-							 EV_SYS_NOT_IR_PHO_CELL
-En typedef enum task_system_st se definen los estados del sistema 
-               ST_SYS_IDLE,
-							 ST_SYS_ACTIVE_01,
-							 ST_SYS_ACTIVE_02,
-							 ST_SYS_ACTIVE_03,
-							 ST_SYS_ACTIVE_04,
-							 ST_SYS_ACTIVE_05,
-							 ST_SYS_ACTIVE_06
+Se incluye una tabla de transición de estados para describir el comportamiento de un LED:
+Estados: apagado, encendido, parpadeo, pulso: EV_LED_XX_ON, EV_LED_XX_OFF, EV_LED_XX_BLINK, EV_LED_XX_PULSE
 
-En typedef struct se definen los tipos de datos
-	uint32_t: tick
-	task_system_st_t: state
-	task_system_ev_t: event
-	bool: flag
+Enumeraciones:
+task_actuator_ev_t -> eventos que puede recibir la tarea
+task_actuator_st_t -> estados posibles del actuador
+task_actuator_id_t -> identificadores de actuadores
 
--task_system_interface.h
+Estructuras
+task_actuator_cfg_t -> configuración estática de un actuador
+task_actuator_dta_t -> datos dinámicos del actuador en tiempo de ejecución
 
-Inicializa la cola de eventos con init_queue_event_task_system
-Agrega un evento a la cola con put_event_task_system
-Obtiene el próximo evento en la cola con get_event_task_system
-Analiza si hay eventos pendientes en la cola con any_event_task_system
+Realiza declaraciones externas con extern task_actuator_dta_t task_actuator_dta_list[];
+La cual permitee que la lógica en otros archivos acceda al estado dinámico de los actuadores
+
+-task_actuador_interface.h
+
+extern void put_event_task_actuator(task_actuator_ev_t event, task_actuator_id_t identifier);
+Esta función permite inyectar eventos en la máquina de estados del actuador.
+Se especifica qué evento ocurre y a qué actuador va dirigido.
+El objetivo es desacoplar la lógica interna del actuador de los módulos externos que lo controlan
 
 -------------------------------------------------------------------------------------------------------------------------
-task_system.png
+task_actuador.png
 
 Maquina de sistema que modela el comportamiento de una barrera, implementada en itemis CREATE.
 
 Estados:
 
--ST_SYS_IDLE -> El sistema esta en estado de espera 
--ST_SYS_ACTIVE_01 -> Una vez detecte un loop (auto) comienza el proceso esperando a que se precione el boton.
--ST_SYS_ACTIVE_02 -> Una vez precionado el boton comienza a abrirse la barrera.
--ST_SYS_ACTIVE_03 -> Se mantiene arriba la barrera hasta que no detecte el loop (auto).
--ST_SYS_ACTIVE_04 -> No detecta mas el loop significando que auto esta en movimiento.
--ST_SYS_ACTIVE_05 -> No detecte mas el auto en movimiento por el infrarojo.
--ST_SYS_ACTIVE_06 -> Comienza a bajar la barrera volviendo al estado idle y cierra el ciclo.
+- ST_LED_XX_OFF -> La luz led esta en estado apagado
+- ST_LED_XX_ON -> La luz led esta en estado encendida
+- ST_LED_XX_BLINK_ON -> Comienza el estado de titilación de la luz led
+- ST_LED_XX_BLINK_OFF -> Finalizado el estado de titilación de la luz led
+- ST_LED_XX_PULSE -> La luz led esta en estado de pulso
+
 
 Eventos:
 
--EV_SYS_LOOP_DETECTOR -> La placa debajo detecta el auto arriba de ella.
--EV_SYS_MANUAL_BUTON -> Se detecta como el usuario presiona el boton.
--EV_SYS_NOT_LOOP_DETECTOR -> La placa debajo no detecta el auto arriba de ella.
--EV_SYS_IR_PHOTO_CELL -> El infrarojo de la barrera detecta el auto en movimiento por abajo.
--EV_SYS_NOT_IR_PHOTO_CELL -> El infrarojo de la barrera no detecta el auto en movimiento por abajo.
--EV_LED_01_OFF -> Deja de manera apagada la luz led 01.
--EV_LED_02_OFF -> Deja de manera apagada la luz led 02.
--EV_LED_01_ON -> Deja de manera prentida la luz led 01.
--EV_LED_02_ON -> Deja de manera prentida la luz led 02.
--EV_LED_01_BLINK -> Titila la luz led.
+-EV_LED_XX_OFF -> Deja de manera apagada la luz led 
+-EV_LED_XX_ON -> Deja de manera prentida la luz led
+-EV_LED_XX_BLINK -> Titila la luz led.
 Equivalentes a constantes enteras enumeradas (enum) en C.
 
 Acciones:
 
-tick = DEL_SYS_MAX ->inicializa un temporizador al valor máximo permitido.
-[tick > DEL_SYS_MIN]/tick-- -> decrementa ese temporizador mientras dure la transición hasta llegar al valor minimo
+tick = DEL_LED_XX_MAX ->inicializa un temporizador al valor máximo permitido.
+[tick > DEL_LED-XX_MIN]/tick-- -> decrementa ese temporizador mientras dure la transición hasta llegar al valor minimo
 Corresponden con asignaciones a variables y disparos de eventos.
 
 Tipos de datos:
 
 tick: entero que actúa como contador/temporizador.
-Constantes: DEL_SYS_MAX, DEL_SYS_MIN: límites de tiempo configurados (#define o const uint32_t).	
+Constantes: DEL_LED_XX_MAX, DEL_LED-XX_MIN: límites de tiempo configurados (#define o const uint32_t).	
 Eventos: Representados como banderas booleanas o como valores de un enum.
 
 ----------------------------------------------------------------------------------------------------------------------------
@@ -87,5 +70,6 @@ El WCET de cada tarea se pone en cero.
 Cada vez que se ejecuta una tarea, se mide cuánto tardó en ese ciclo utilizando cycle_counter_time_us.
 Si ese tiempo supera al WCET guardado, se actualiza y si es menor o igual, el WCET no cambia.
 Cada WCET (de task_tda_list[x]) comienza en 0.
+
 
 
