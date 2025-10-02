@@ -4,4 +4,79 @@
   task_actuator_interface.c (task_actuator_interface.h)
    Non-Blocking Code
 
-...
+task_actuador.c:
+Implementa la tarea actuadora, su función principal es manejar LEDs como actuadores.
+
+Macros y definiciones:
+  #define G_TASK_ACT_CNT_INIT   0ul
+  #define G_TASK_ACT_TICK_CNT_INI 0ul
+  #define DEL_LED_XX_MAX  250ul
+  #define DEL_LED_XX_PUL  250ul
+  #define DEL_LED_XX_BLI  500ul
+  #define DEL_LED_XX_MIN  0ul
+    Definen valores iniciales de contadores y ticks para los LEDs.
+    DEL_LED_XX_MAX/BLI/PUL -> Duración en ticks de distintos modos de LED (blink, pulse).
+
+Tipos de datos y estructuras
+  task_actuator_cfg_t: Contiene configuración de cada LED
+  task_actuator_dta_t: Contiene estado dinámico de la tarea
+
+Estados posibles (task_actuator_st_t): ST_LED_XX_OFF , ST_LED_XX_ON , ST_LED_XX_BLINK_ON , ST_LED_XX_BLINK_OFF , ST_LED_XX_PULSE
+Eventos posibles (task_actuator_ev_t): EV_LED_XX_OFF , EV_LED_XX_ON , EV_LED_XX_BLINK , EV_LED_XX_PULSE , EV_LED_XX_NOT_BLINK
+
+Arrays de estructuras de datos
+Configuración de actuadores: const task_actuator_cfg_t task_actuator_cfg_list[] -> Array constante con la configuración de cada LED
+Datos dinámicos: task_actuator_dta_t task_actuator_dta_list[] -> Array mutable, mantiene estado de la FSM para cada actuador. ACTUATOR_DTA_QTY determina la cantidad de entradas.
+
+Variables globales
+uint32_t g_task_actuator_cnt -> Contador de ejecuciones de la tarea.
+volatile uint32_t g_task_actuator_tick_cnt -> Tick counter controlado por HAL_SYSTICK_Callback desde app.c.
+
+Funciones principales
+- task_actuator_init():
+    Inicializa contadores, estados y pines GPIO. 
+    Configura la FSM para cada actuador:
+      Estado inicial: ST_LED_XX_OFF
+      Evento inicial: EV_LED_XX_OFF
+      Flag: false
+    Es no bloqueante y solo prepara hardware y estructuras.
+- task_actuator_update():
+    Ejecuta la FSM en bucle no bloqueante:
+    Verifica si hay ticks pendientes (g_task_actuator_tick_cnt).
+    Incrementa el contador de ejecuciones (g_task_actuator_cnt).
+    Llama a task_actuator_statechart().
+    Actualiza el tick counter de manera atómica (deshabilitando interrupciones).  
+    Se repite mientras haya ticks pendientes.
+- task_actuator_statechart():
+    Implementa la máquina de estados de los LEDs.
+    Para cada actuador (for sobre ACTUATOR_DTA_QTY):
+      Evalúa el estado actual.
+      Si hay un evento activo (flag == true), realiza la transición correspondiente:
+        ST_LED_XX_OFF → ST_LED_XX_ON, ST_LED_XX_BLINK_ON, ST_LED_XX_PULSE
+        ST_LED_XX_ON → ST_LED_XX_OFF
+        ST_LED_XX_BLINK_ON/OFF → alterna LED según tick counter
+        ST_LED_XX_PULSE → se apaga automáticamente al final del pulso
+    Actualiza tick, estado, evento y flag.
+    Controla hardware usando HAL_GPIO_WritePin().
+____________________________________________________________________________________________________________________________
+
+Evolucion de g_app_runtime_us
+
+Al iniciar cada ciclo de actualización de la aplicación, g_app_runtime_us se reinicia. Luego, se ejecutan todas las tareas.
+Para cada tarea se mide el tiempo de ejecución real en microsegundos usando el DWT cycle counter.
+Ese tiempo se acumula en g_app_runtime_us.
+Al terminar el ciclo, g_app_runtime_us contiene el tiempo total de CPU consumido por todas las tareas en esa iteración.
+En el siguiente ciclo de app_update(), el proceso se repite: se reinicia y vuelve a calcularse.
+Comienza en Value = 0 y termina en Value = 20. Al presionar el botón baja a Value = 19 y al soltarlo sube a 20. 
+
+Evolucion WCET
+
+El WCET de cada tarea se pone en cero.
+Cada vez que se ejecuta una tarea, se mide cuánto tardó en ese ciclo utilizando cycle_counter_time_us.
+Si ese tiempo supera al WCET guardado, se actualiza y si es menor o igual, el WCET no cambia.
+Cada WCET (de task_tda_list[x]) comienza en 0.
+- WCET del [0] cambia a 12
+- WCET del [1] cambia a 4
+- WCET del [2] cambia a 4
+Luego, al presionar el botón cambian a 14, 7, 5, respectivamente.
+
